@@ -164,4 +164,4 @@ st.markdown("""
   - Lighting  
   - Motion  
   - Camera quality  
-""") how to open the camera in the deployment in github
+""") 
