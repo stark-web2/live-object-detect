@@ -39,11 +39,13 @@ save_frames = st.sidebar.checkbox("💾 Save Frames")
 show_logs = st.sidebar.checkbox("📝 Show Detection Log")
 
 
+st.sidebar.subheader("📂 Input Source")
+source = st.sidebar.radio("Choose Input", ["Webcam (Local)", "Upload Video"])
+
 object_counts = defaultdict(int)
 tracked_ids = set()
 detection_log = []
 saved_images = []
-
 
 if not os.path.exists("saved_frames"):
     os.makedirs("saved_frames")
@@ -52,29 +54,43 @@ frame_placeholder = st.empty()
 status_text = st.empty()
 fps_text = st.empty()
 
-camera = cv2.VideoCapture(0)
+camera = None
+
+if source == "Webcam (Local)":
+    st.warning("⚠️ Webcam works only locally, not in Streamlit Cloud.")
+    camera = cv2.VideoCapture(0)
+
+else:
+    uploaded_file = st.sidebar.file_uploader("Upload Video", type=["mp4", "mov", "avi"])
+
+    if uploaded_file is not None:
+        with open("temp_video.mp4", "wb") as f:
+            f.write(uploaded_file.read())
+        camera = cv2.VideoCapture("temp_video.mp4")
+    else:
+        st.info("📁 Please upload a video file")
+
 frame_count = 0
 prev_time = time.time()
 
-if run:
-    status_text.success("📷 Camera running...")
 
-    while True:
+if run and camera is not None:
+    status_text.success("📷 Running...")
+
+    while camera.isOpened():
         ret, frame = camera.read()
         if not ret:
-            st.error("❌ Camera not detected")
+            st.warning("⚠️ End of video or camera not working")
             break
 
         frame_count += 1
 
-       
+    
         current_time = time.time()
         fps = 1 / (current_time - prev_time)
         prev_time = current_time
 
-      
         results = model.track(frame, persist=True, conf=conf)
-
         annotated = frame.copy()
 
         if results[0].boxes is not None:
@@ -86,7 +102,7 @@ if run:
                 conf_score = float(box.conf[0])
                 label = model.names[cls]
 
-                
+          
                 text = f"{label} ({conf_score:.2f})"
                 cv2.rectangle(annotated, (x1, y1), (x2, y2), (0,255,0), 2)
                 cv2.putText(annotated, text, (x1, y1 - 10),
@@ -95,44 +111,40 @@ if run:
            
                 if box.id is not None:
                     obj_id = int(box.id[0])
-
                     if obj_id not in tracked_ids:
                         tracked_ids.add(obj_id)
                         object_counts[label] += 1
 
-                # ALERT SYSTEM
+             
                 if alert_object and label.lower() == alert_object.lower():
                     st.warning(f"⚠️ ALERT: {label} detected!")
 
-           
-                detection_log.append(f"{time.strftime('%H:%M:%S')} - {label} ({conf_score:.2f})")
+            
+                detection_log.append(
+                    f"{time.strftime('%H:%M:%S')} - {label} ({conf_score:.2f})"
+                )
 
-    
+        
         if save_frames and frame_count % 30 == 0:
             filename = f"saved_frames/frame_{int(time.time())}.jpg"
             cv2.imwrite(filename, annotated)
             saved_images.append(filename)
 
-
+  
         frame_placeholder.image(annotated, channels="BGR")
-
-       
         fps_text.markdown(f"### ⚡ FPS: {fps:.2f}")
-
 
         with st.sidebar:
             st.subheader("📊 Object Counts")
             for obj, count in object_counts.items():
                 st.write(f"{obj}: {count}")
 
-        # Stop condition fix
-        if not st.session_state.get("Start Camera", True):
-            break
-
 else:
-    status_text.warning("⚠️ Camera OFF")
+    status_text.warning("⚠️ Camera OFF or no input selected")
 
-camera.release()
+
+if camera is not None:
+    camera.release()
 
 
 st.markdown("---")
@@ -149,6 +161,7 @@ if saved_images:
             )
 else:
     st.write("No saved frames yet.")
+
 
 st.markdown("---")
 st.header("📄 Observation & Report")
