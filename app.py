@@ -9,7 +9,7 @@ from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 import av
 
 # -----------------------------
-# PAGE CONFIG
+# PAGE SETUP
 # -----------------------------
 st.set_page_config(page_title="Live Object Detection & Tracing", layout="wide")
 
@@ -46,24 +46,27 @@ conf = st.sidebar.slider("Confidence Threshold", 0.1, 1.0, 0.5)
 run = st.sidebar.checkbox("Start Camera")
 
 alert_object = st.sidebar.text_input("🔔 Alert Object")
-
+save_frames = st.sidebar.checkbox("💾 Save Frames")
 show_logs = st.sidebar.checkbox("📝 Show Detection Log")
 
 # -----------------------------
-# STORAGE
+# DATA STORAGE
 # -----------------------------
 object_counts = defaultdict(int)
+tracked_ids = set()
 detection_log = []
+saved_images = []
+
+if not os.path.exists("saved_frames"):
+    os.makedirs("saved_frames")
 
 # -----------------------------
-# WEBRTC VIDEO PROCESSOR
+# WEBRTC VIDEO PROCESSOR (FIXED CAMERA)
 # -----------------------------
 class VideoProcessor(VideoTransformerBase):
     def __init__(self):
         self.model = model
         self.conf = conf
-        self.object_counts = defaultdict(int)
-        self.tracked_ids = set()
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
@@ -78,7 +81,7 @@ class VideoProcessor(VideoTransformerBase):
                 conf_score = float(box.conf[0])
                 label = self.model.names[cls]
 
-                # Draw box
+                # Draw bounding box
                 cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(
                     annotated,
@@ -94,7 +97,7 @@ class VideoProcessor(VideoTransformerBase):
                 if alert_object and label.lower() == alert_object.lower():
                     st.toast(f"⚠️ ALERT: {label} detected!")
 
-                # Log
+                # Log detection
                 detection_log.append(
                     f"{time.strftime('%H:%M:%S')} - {label} ({conf_score:.2f})"
                 )
@@ -105,10 +108,10 @@ class VideoProcessor(VideoTransformerBase):
 # CAMERA SECTION (FIXED)
 # -----------------------------
 if run:
-    st.success("📷 Camera started (WebRTC mode)")
+    st.success("📷 Camera running (WebRTC mode - Deployment Ready)")
 
     webrtc_streamer(
-        key="yolo-live",
+        key="yolo-live-camera",
         video_processor_factory=VideoProcessor,
         media_stream_constraints={"video": True, "audio": False},
     )
@@ -116,7 +119,7 @@ else:
     st.warning("⚠️ Camera OFF")
 
 # -----------------------------
-# LOGS
+# SAVED LOGS
 # -----------------------------
 st.markdown("---")
 st.header("📄 Detection Logs")
@@ -127,7 +130,7 @@ else:
     st.write("Enable 'Show Detection Log' to view results.")
 
 # -----------------------------
-# INFO SECTION
+# REFLECTION SECTION
 # -----------------------------
 st.markdown("---")
 st.header("💭 Reflection Questions")
