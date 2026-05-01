@@ -1,4 +1,4 @@
-from this code how to fix camera import streamlit as st
+import streamlit as st
 import cv2
 import time
 from ultralytics import YOLO
